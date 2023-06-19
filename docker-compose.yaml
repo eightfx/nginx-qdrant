@@ -1,0 +1,33 @@
+version: '3'
+
+services:
+  webserver:
+    image: nginx:latest
+    ports:
+      - 80:80
+      - 443:443
+    restart: always
+    volumes:
+      - ./nginx/conf/qdrant.template:/etc/nginx/conf.d/qdrant.template:ro  
+      - ./nginx/start_nginx.sh:/start_nginx.sh:ro  # 起動スクリプト
+      - ./certbot/www:/var/www/certbot/:ro  # certbotのデータを共有
+      - ./certbot/conf/live/${QDRANT_DOMAIN}:/etc/nginx/ssl/:ro  # SSL証明書のデータを共有
+    command: ["/bin/sh", "/start_nginx.sh"]
+    environment:
+      - QDRANT_DOMAIN=${QDRANT_DOMAIN}  # 環境変数をコンテナに渡す
+    depends_on:
+      - qdrant
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./certbot/www/:/var/www/certbot/:rw
+      - ./certbot/conf/:/etc/letsencrypt/:rw
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done'"  # 12時間ごとに証明書の更新を試みる
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - 6333:6333
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+      - ./qdrant/conf.yaml:/qdrant/config/config.yaml
